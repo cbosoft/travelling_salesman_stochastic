@@ -100,7 +100,7 @@ CityList *get_cities(const char *path)
 }
 
 double get_distance(City *a, City *b) {
-  return std::pow((a->first - b->first), 2.0) + std::pow((a->second - b->second), 2.0);
+  return std::pow(std::pow((a->first - b->first), 2.0) + std::pow((a->second - b->second), 2.0), 0.5);
 }
 
 
