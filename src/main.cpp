@@ -20,12 +20,16 @@ class Shuffler {
     CityList *cities;
     std::random_device rd;
     std::mt19937 randgen;
+    std::uniform_int_distribution<> index_dist;
+    std::uniform_real_distribution<> prob_dist;
   public:
     Shuffler(){
       this->randgen = std::mt19937(this->rd());
     };
     Shuffler(CityList *cities) : Shuffler() { 
       this->cities = cities; 
+      this->index_dist = std::uniform_int_distribution<>(0, cities->size()-1);
+      this->prob_dist = std::uniform_real_distribution<>(0.0, 1.0);
     };
 
     void swap(int left, int right) {
@@ -34,24 +38,21 @@ class Shuffler {
       (*this->cities)[right] = temp;
     }
 
-    int get_rand_int(int min, int max) {
-      std::uniform_int_distribution<> dist(min, max);
-      return dist(this->randgen);
+    int get_rand_int() {
+      return this->index_dist(this->randgen);
     }
     double get_rand_double() {
-      std::uniform_real_distribution<> dist(0, 1);
-      return dist(this->randgen);
+      return this->prob_dist(this->randgen);
     }
 
     void shuffle(int n = 1) {
-      int len = this->cities->size();
       int left = 0, right = 0;
       for (int i = 0; i < n; i++) {
 
         // get two distinct indices
-        left = this->get_rand_int(0, len-1);
+        left = this->get_rand_int();
         do {
-          right = this->get_rand_int(0, len-1);
+          right = this->get_rand_int();
         } while (right == left);
 
         // swap and add to history
@@ -112,6 +113,10 @@ double get_route_distance(CityList *cities) {
   }
   return total;
 }
+
+// TODO:
+// table of precomputed distances
+// move functions to class methods of CityList class
 
 
 
