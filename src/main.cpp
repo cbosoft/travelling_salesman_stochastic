@@ -131,31 +131,28 @@ int main(int argc, const char *argv[])
   auto cities = get_cities(cities_file);
 
   Shuffler shuffler(cities);
-  double beta = 1;
-  int nshuffles = 4*cities->size();
-  int ndecr = 15;
-  int dshuffles = nshuffles / (ndecr - 1);
-  double dist = get_route_distance(cities), dist_new = 0.0;//, delta_dist = 0.0;
+  double beta = 0.1;
+  int nshuffles = 2*cities->size();
+  int ndecr = 2*nshuffles;
+  //int dshuffles = nshuffles / ((ndecr)*0.5);
+  double dist = get_route_distance(cities), dist_new = 0.0, delta_dist = 0.0;
 
   for (int j = 0; j < ndecr; j++) {
 
-    for (int i = 0; i < 1000; i++) {
-      std::cerr << "nshuff: " << nshuffles << " dist: " << dist << " ";
+    for (int i = 0; i < 5000; i++) {
       shuffler.shuffle(nshuffles);
 
       dist_new = get_route_distance(cities);
-      //delta_dist = std::abs(dist-dist_new);
+      delta_dist = dist_new - dist;
 
-      if (dist_new < dist) {
-        std::cerr << "distance " << dist_new << " is better than " << dist << std::endl;
+      if (delta_dist <= 0.0) {
         dist = dist_new;
       }
-      else if (shuffler.get_rand_double() < std::exp(-beta) ) {
-        std::cerr << "random chance " << beta << std::endl;
+      else if (double r = std::log(shuffler.get_rand_double()) < (beta*delta_dist*-1) ) {
+        std::cerr << "random chance " << beta*delta_dist*-1 << " > " << r << " delta_dist: " << delta_dist << std::endl;
         dist = dist_new;
       }
       else {
-        std::cerr << "undoing" << std::endl;
         shuffler.unshuffle(nshuffles);
       }
 
@@ -163,8 +160,13 @@ int main(int argc, const char *argv[])
 
     }
 
-    beta *= 2.0;
-    nshuffles -= dshuffles;
+    beta *= 5.0;
+    if (nshuffles > 1) {
+      nshuffles -= 1;
+    }
+    else {
+      nshuffles = 1;
+    }
 
   }
 
