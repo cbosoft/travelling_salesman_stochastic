@@ -4,38 +4,99 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <map>
 
-typedef std::pair<double, double> City;
-typedef std::vector<City *> CityList;
+enum LOC_TYPE { LOC_CITY, LOC_BRIDGE };
+class Location {
+  private:
+    double x, y;
+    int type, index;
+  public:
+    Location(){}
+    Location(int type, double x, double y, int index) {
+      this->type = type;
+      this->x = x;
+      this->y = y;
+      this->index = index;
+    }
 
-void print_cities(CityList *cities) {
-  for (auto it = cities->begin(); it != cities->end(); ++it)
-    std::cout << (*it)->first << " " << (*it)->second << std::endl;
+    double get_x() const { return this->x; }
+    double get_y() const { return this->y; }
+    int get_index() const { return this->index; }
+
+    bool is_city() const {
+      return this->type == LOC_CITY;
+    }
+
+    void print() const {
+      //std::cout << (this->is_city() ? "C " : "B ") << this->x << " " << this->y << std::endl;
+      std::cout << this->x << " " << this->y << std::endl;
+    }
+};
+
+class City : public Location {
+  public:
+    City(){}
+    City (double x, double y, int index) : Location (LOC_CITY, x, y, index) {}
+};
+class Bridge : public Location {
+  public:
+    Bridge(){}
+    Bridge (double x, double y, int index) : Location (LOC_BRIDGE, x, y, index) {}
+};
+
+
+
+
+typedef std::vector<Location> Route;
+
+void print_route(const Route& route) {
+  for (auto it = route.begin(); it != route.end(); ++it)
+    it->print();
 }
 
 
-class Shuffler {
+
+double distance_two_coords(double x1, double y1, double x2, double y2) {
+  return std::pow(std::pow(x1-x2, 2.0) + std::pow(y1-y2, 2.0), 0.5);
+}
+
+
+class StochOpt {
   private:
-    std::vector<std::pair<int, int>> shuffle_history;
-    CityList *cities;
+    std::vector<std::pair<int, int>> swap_history;
+    Route route;
+    Route best_route;
+    double best_distance;
+    Route working_route;
+    std::vector<Bridge> bridges;
     std::random_device rd;
     std::mt19937 randgen;
     std::uniform_int_distribution<> index_dist;
     std::uniform_real_distribution<> prob_dist;
+    std::map<std::pair<int, int>, double> dist_lookup;
+
+    int initial_number_swaps, number_steps, number_shuffles;
+    double initial_probability, probability_rate;
+
   public:
-    Shuffler(){
+    StochOpt(){
       this->randgen = std::mt19937(this->rd());
+      best_distance = 1e10;
     };
-    Shuffler(CityList *cities) : Shuffler() { 
-      this->cities = cities; 
-      this->index_dist = std::uniform_int_distribution<>(0, cities->size()-1);
+
+    StochOpt(Route route) : StochOpt() { 
+      this->route = route;
+      this->working_route = route;
+      this->init_lookuptable();
+      this->index_dist = std::uniform_int_distribution<>(0, route.size()-1);
       this->prob_dist = std::uniform_real_distribution<>(0.0, 1.0);
     };
 
     void swap(int left, int right) {
-      City *temp = (*this->cities)[left];
-      (*this->cities)[left] = (*this->cities)[right];
-      (*this->cities)[right] = temp;
+      Location temp = this->working_route[left];
+      this->working_route[left] = this->working_route[right];
+      this->working_route[right] = temp;
     }
 
     int get_rand_int() {
@@ -57,7 +118,7 @@ class Shuffler {
 
         // swap and add to history
         this->swap(left, right);
-        this->shuffle_history.push_back(std::make_pair(left, right));
+        this->swap_history.push_back(std::make_pair(left, right));
 
       }
     }
@@ -67,56 +128,132 @@ class Shuffler {
       for (int i = 0; i < n; i++) {
 
         // get last swap from history
-        swap = this->shuffle_history.back();
+        swap = this->swap_history.back();
 
         // redo the swap, remove from history
         this->swap(swap.first, swap.second);
-        this->shuffle_history.pop_back();
+        this->swap_history.pop_back();
       }
     }
 
     void clear() {
-      this->shuffle_history.clear();
+      this->swap_history.clear();
+    }
+
+    // TODO: river!
+
+    void add_bridge(Bridge bridge) {
+      this->bridges.push_back(bridge);
+    }
+
+    void init_lookuptable() {
+      double distance = 0.0;
+      std::pair<int, int> key;
+      for (const auto& city_a : this->route) {
+        for (const auto& city_b : this->route) {
+          distance = distance_two_coords(city_a.get_x(), city_a.get_y(), city_b.get_x(), city_b.get_y());
+          key = std::make_pair<int, int>(city_a.get_index(), city_b.get_index());
+          this->dist_lookup[key] = distance;
+        }
+      }
+    }
+
+    double get_distance(int a, int b) {
+      std::pair<int, int> key = std::make_pair(a, b);
+      return this->dist_lookup[key];
+    }
+
+    double get_route_distance(const Route& route) {
+      double total = 0.0;
+      int len = route.size(), ni = 0;
+      for (int i = 0; i < len; i++) {
+        ni = (i == (len-1)) ? 0 : i+1;
+        total += get_distance( route[i].get_index(), route[ni].get_index() );
+      }
+      return total;
+    }
+
+    double get_working_route_distance() { return this->get_route_distance(this->working_route); }
+    double get_working_best_distance() { return this->get_route_distance(this->best_route); }
+
+    void set_settings() {
+      this->initial_number_swaps = 3*this->route.size()/2;
+      this->number_steps = 100;
+      this->number_shuffles = 1000;
+      this->initial_probability = 0.9;
+      this->probability_rate = 0.9;
+    }
+
+    void optimize() {
+
+      // initial values
+      double distance = get_working_route_distance(), dist_new = 0.0, delta_dist = 0.0;
+      double probability = this->initial_probability;
+      int number_swaps = this->initial_number_swaps;
+
+      this->best_route = this->working_route;
+      this->best_distance = distance;
+
+      for (int j = 0; j < this->number_steps; j++) {
+
+        //std::cerr << "probability: " << probability << " dist: " << distance << " number_swaps: " << number_swaps << std::endl;
+        for (int i = 0; i < this->number_shuffles; i++) {
+          this->shuffle(number_swaps);
+
+          dist_new = get_working_route_distance();
+          delta_dist = dist_new - distance;
+
+          if (delta_dist <= 0.0) {
+            distance = dist_new;
+          }
+          else if (this->get_rand_double() < probability ) {
+            distance = dist_new;
+          }
+          else {
+            this->unshuffle(number_swaps);
+          }
+
+          if (distance < this->best_distance) {
+            this->best_route = this->working_route;
+            this->best_distance = distance;
+          }
+
+        }
+
+        probability *= this->probability_rate;
+        if (number_swaps > 1) {
+          number_swaps -= 1;
+        }
+        else {
+          number_swaps = 1;
+        }
+
+      }
+
+      print_route(this->best_route);
+      std::cerr << "Optimal route length: " << this->best_distance << std::endl;
     }
 };
 
 
 
 
-CityList *get_cities(const char *path)
+Route get_cities(const char *path)
 {
   std::fstream cities_file(path);
   
-  CityList *cities = new std::vector<std::pair<double, double> *>();
-  City *pair = NULL;
+  Route route = std::vector<Location>();
+  City pair;
   double x, y;
+  int i = 0;
 
   while (cities_file >> x >> y) {
-    pair = new City(x, y);
-    cities->push_back(pair);
+    pair = City(x, y, i++);
+    route.push_back(pair);
   }
   
-  return cities;
+  return route;
 }
-
-double get_distance(City *a, City *b) {
-  return std::pow(std::pow((a->first - b->first), 2.0) + std::pow((a->second - b->second), 2.0), 0.5);
-}
-
-
-double get_route_distance(CityList *cities) {
-  double total = 0.0;
-  int len = cities->size(), ni = 0;
-  for (int i = 0; i < len; i++) {
-    ni = (i == (len-1)) ? 0 : i+1;
-    total += get_distance( (*cities)[i], (*cities)[ni] );
-  }
-  return total;
-}
-
-// TODO:
-// table of precomputed distances
-// move functions to class methods of CityList class
 
 
 
@@ -128,48 +265,8 @@ int main(int argc, const char *argv[])
   if (argc > 1)
     cities_file = argv[1];
 
-  auto cities = get_cities(cities_file);
 
-  Shuffler shuffler(cities);
-  double beta = 0.1;
-  int nshuffles = 2*cities->size();
-  int ndecr = 2*nshuffles;
-  //int dshuffles = nshuffles / ((ndecr)*0.5);
-  double dist = get_route_distance(cities), dist_new = 0.0, delta_dist = 0.0;
-
-  for (int j = 0; j < ndecr; j++) {
-
-    for (int i = 0; i < 5000; i++) {
-      shuffler.shuffle(nshuffles);
-
-      dist_new = get_route_distance(cities);
-      delta_dist = dist_new - dist;
-
-      if (delta_dist <= 0.0) {
-        dist = dist_new;
-      }
-      else if (double r = std::log(shuffler.get_rand_double()) < (beta*delta_dist*-1) ) {
-        std::cerr << "random chance " << beta*delta_dist*-1 << " > " << r << " delta_dist: " << delta_dist << std::endl;
-        dist = dist_new;
-      }
-      else {
-        shuffler.unshuffle(nshuffles);
-      }
-
-      shuffler.clear();
-
-    }
-
-    beta *= 5.0;
-    if (nshuffles > 1) {
-      nshuffles -= 1;
-    }
-    else {
-      nshuffles = 1;
-    }
-
-  }
-
-  print_cities(cities);
-  std::cerr << "Optimal route length: " << dist << std::endl;
+  StochOpt opt(get_cities(cities_file));
+  opt.set_settings();
+  opt.optimize();
 }
