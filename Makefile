@@ -1,5 +1,5 @@
 CXX = g++
-CFLAGS = -Wall -Wextra -std=c++17 -O0
+CFLAGS = -Wall -Wextra -std=c++17 -Ofast
 OBJ = obj/main.o
 LINK = 
 
