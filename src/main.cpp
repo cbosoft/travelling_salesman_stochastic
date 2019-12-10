@@ -133,7 +133,6 @@ class StochOpt {
     std::mt19937 randgen;
     std::uniform_int_distribution<> index_dist;
     std::uniform_real_distribution<> prob_dist;
-    //std::map<std::pair<int, int>, double> dist_lookup;
     double **dist_lookup;
     River river;
 
@@ -154,7 +153,7 @@ class StochOpt {
       this->prob_dist = std::uniform_real_distribution<>(0.0, 1.0);
       this->initial_number_swaps = 3*this->route.size()/2;
       this->number_steps = 100;
-      this->number_shuffles = 10000;
+      this->number_shuffles = 5000;
       this->initial_probability = 0.9;
       this->probability_rate = 0.9;
     };
@@ -257,18 +256,19 @@ class StochOpt {
           if (city_a->get_index() == city_b->get_index()) continue;
           city_a->get_values(xa, ya, a);
           city_b->get_values(xb, yb, b);
-          if (this->crosses_river_p(xa, ya, xb, yb)) {
-            Bridge bridge = this->get_best_bridge(xa, ya, xb, yb);
-            double xbridge, ybridge;
-            int bridge_index;
-            bridge.get_values(xbridge, ybridge, bridge_index);
-            distance = distance_two_coords(xa, ya, xbridge, ybridge) + distance_two_coords(xbridge, ybridge, xb, yb);
-            std::cerr << "crosses river" << std::endl;
-          }
-          else {
+          // if (this->crosses_river_p(xa, ya, xb, yb)) {
+          //   Bridge bridge = this->get_best_bridge(xa, ya, xb, yb);
+          //   double xbridge, ybridge;
+          //   int bridge_index;
+          //   bridge.get_values(xbridge, ybridge, bridge_index);
+          //   distance = distance_two_coords(xa, ya, xbridge, ybridge) + distance_two_coords(xbridge, ybridge, xb, yb);
+          //   std::cerr << "crosses river" << std::endl;
+          // }
+          // else {
             distance = distance_two_coords(xa, ya, xb, yb);
-          }
+          //}
           this->dist_lookup[a][b] = distance;
+          this->dist_lookup[b][a] = distance;
         }
       }
     }
@@ -373,8 +373,8 @@ int main(int argc, const char *argv[])
 
 
   StochOpt opt(get_cities(cities_file));
-  opt.add_river(River(0, 0.5));
-  opt.add_bridge(Bridge(0.5, 0.5, 0));
+  // opt.add_river(River(0, 0.5));
+  // opt.add_bridge(Bridge(0.5, 0.5, 0));
   opt.optimise();
 
 
