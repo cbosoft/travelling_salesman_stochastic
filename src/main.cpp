@@ -337,7 +337,7 @@ class StochOpt {
       }
 
       print_route(this->best_route);
-      std::cerr << "Optimal route length: " << this->best_distance << std::endl;
+      std::cerr << this->best_distance << std::endl;
     }
 };
 
